@@ -7,6 +7,8 @@ RUN CGO_ENABLED=0 go build -o /app/bin/yukari .
 
 FROM alpine:3.20
 
+RUN apk -U add ca-certificates mailcap
+
 COPY --from=build /app/bin/yukari /app/bin/yukari
 
 ENV BIND=:9200
