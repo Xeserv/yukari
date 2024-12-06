@@ -17,7 +17,7 @@ spec:
     http:
       paths:
       - pathType: Prefix
-        path: "/"
+        path: "/v2"
         backend:
           service:
             name: yukari

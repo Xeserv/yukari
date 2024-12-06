@@ -30,6 +30,9 @@ spec:
           envFrom:
           - secretRef:
               name: yukari-tigris-creds
+          env:
+          - name: "SLOG_LEVEL"
+            value: "debug"
           securityContext:
             runAsUser: 1000
             runAsGroup: 1000

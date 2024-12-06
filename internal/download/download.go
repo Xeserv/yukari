@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ManifestRegex = regexp.MustCompile(`/v2/(\w+/\w+)`)
+	ManifestRegex = regexp.MustCompile(`/v2/([\w.]+/[\w.]+)`)
 )
 
 type Downloader struct {
