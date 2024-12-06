@@ -1,77 +1,56 @@
 package main
 
 import (
-	"fmt"
-	"github.com/alecthomas/kong"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"flag"
+	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"ollama-registry-pull-through-cache/internal/handler/proxy"
-	"ollama-registry-pull-through-cache/internal/worker/cache_worker"
-	"ollama-registry-pull-through-cache/internal/worker/invalidate_manifests_worker"
-	"ollama-registry-pull-through-cache/pkg/dumptransport"
-	"os"
 	"time"
+
+	"github.com/Xeserv/yukari/internal"
+	"github.com/Xeserv/yukari/internal/proxy"
+	"github.com/Xeserv/yukari/internal/worker/cache"
+	"github.com/Xeserv/yukari/internal/worker/invalidator"
+	"github.com/facebookgo/flagenv"
 )
 
-var cli struct {
-	Port                    int           `kong:"default='9200',env='PORT',help='port to listen on'"`
-	UpstreamAddress         string        `kong:"default='https://registry.ollama.ai/',env='UPSTREAM_ADDRESS',help='upstream address to connect to. Can be IP or name, later one will be resolved'"`
-	DumpUpstreamRequests    bool          `kong:"env='DUMP_UPSTREAM_REQUESTS',help='If set to true then all upstream request and responses will be dumped to the console'"`
-	CacheDir                string        `kong:"default='./cache_dir',env='CACHE_DIR',help='What directory to use as base for the cache'"`
-	NumberOfDownloadWorkers int           `kong:"default='1',env='NUM_DOWNLOAD_WORKERS',help='Number of parallel workers to use for downloading files'"`
-	ManifestLifetime        time.Duration `kong:"default='240h',env='MANIFEST_LIFETIME',help='How long to keep manifests in cache before invalidating them. Default 10 days.'"`
-	LogLevel                string        `kong:"default='info',env='LOG_LEVEL',help='Log level to use. Can be debug, info, warn, error'"`
-	LogFormatJSON           bool          `kong:"env='LOG_FORMAT_JSON',help='If set to true, then log as JSON output'"`
-}
+var (
+	bind              = flag.String("bind", ":9200", "host:port to bind on")
+	cacheDir          = flag.String("cache-dir", "./cache_dir", "local directory to cache things in")
+	downloadWorkerNum = flag.Int("download-worker-num", 1, "number of parallel download workers to use")
+	manifestLifetime  = flag.Duration("manifest-lifetime", 240*time.Hour, "how long to keep cached manifests before invalidating them")
+	slogLevel         = flag.String("slog-level", "INFO", "log level")
+	upstreamRegistry  = flag.String("upstream-registry", "https://registry.ollama.ai/", "upstream registry URL")
+)
 
 func main() {
-	kong.Parse(&cli)
+	flagenv.Parse()
+	flag.Parse()
 
-	// Setup Logger
-	if !cli.LogFormatJSON {
-		// Use Human readable (console out) log format
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
-	}
-	switch cli.LogLevel {
-	case "debug":
-		log.Logger.Level(zerolog.DebugLevel)
-	case "info":
-		log.Logger.Level(zerolog.InfoLevel)
-	case "warn":
-		log.Logger.Level(zerolog.WarnLevel)
-	case "error":
-		log.Logger.Level(zerolog.ErrorLevel)
-	}
+	internal.InitSlog(*slogLevel)
 
-	// Validate upstream address
-	upstream, err := url.Parse(cli.UpstreamAddress)
+	upstream, err := url.Parse(*upstreamRegistry)
 	if err != nil {
-		log.Error().Str("component", "main").Err(err).Msg("failed to parse upstream address")
-	}
-	if upstream.Host == "" {
-		log.Error().Str("component", "main").Msg("Failed to parse upstream address, no host found")
-	}
-	if upstream.Scheme == "" {
-		log.Error().Str("component", "main").Msg("Failed to parse upstream address, no scheme found")
+		log.Fatalf("can't parse upstream registry URL %q: %v", *upstreamRegistry, err)
 	}
 
-	go invalidate_manifests_worker.Run(cli.CacheDir, cli.ManifestLifetime)
-	for i := 0; i < cli.NumberOfDownloadWorkers; i++ {
-		go cache_worker.Run(cli.CacheDir, upstream)
+	go invalidator.Run(*cacheDir, *manifestLifetime)
+	for i := 0; i < *downloadWorkerNum; i++ {
+		go cache.Run(*cacheDir, upstream)
 	}
 
 	singleHostReverseProxy := httputil.NewSingleHostReverseProxy(upstream)
-	if cli.DumpUpstreamRequests {
-		singleHostReverseProxy.Transport = &dumptransport.Transport{}
-	}
-	http.HandleFunc("/", proxy.Handler(
-		singleHostReverseProxy,
-		cli.CacheDir,
-		*upstream))
 
-	log.Info().Str("component", "main").Msgf("Starting server on port %d", cli.Port)
-	log.Error().Err(http.ListenAndServe(fmt.Sprintf(":%d", cli.Port), nil))
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", proxy.Handler(
+		singleHostReverseProxy,
+		*cacheDir,
+		*upstream,
+	))
+
+	slog.Info("starting server on", "url", "http://0.0.0.0"+*bind)
+	log.Fatalf("can't start HTTP server: %v", http.ListenAndServe(*bind, mux))
 }
