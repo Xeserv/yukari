@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: yukari
+  labels:
+    app.kubernetes.io/name: yukari
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+      - yukari.xeserv.us
+      secretName: yukari-xeserv-us-public-tls
+  rules:
+  - host: yukari.xeserv.us
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: yukari
+            port:
+              name: http

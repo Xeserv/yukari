@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -58,6 +59,10 @@ func main() {
 		*upstream,
 		s3c,
 	))
+
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "OK")
+	})
 
 	slog.Info("starting server on", "url", "http://0.0.0.0"+*bind)
 	log.Fatalf("can't start HTTP server: %v", http.ListenAndServe(*bind, mux))
