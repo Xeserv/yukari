@@ -1,36 +1,19 @@
-#
-# Builder
-#
+FROM golang:1.23-alpine3.20 AS build
 
-FROM golang:1.22-alpine AS builder
-
-# Create a workspace for the app
 WORKDIR /app
+COPY . .
 
-# Copy over the files
-COPY . ./
+RUN CGO_ENABLED=0 go build -o /app/bin/yukari .
 
-# Build
-RUN go build -o proxy
+FROM alpine:3.20
 
-#
-# Runner
-#
+COPY --from=build /app/bin/yukari /app/bin/yukari
 
-FROM alpine AS runner
+ENV BIND=:9200
+ENV MANIFEST_LIFETIME=240h
+ENV SLOG_LEVEL=ERROR
+ENV UPSTREAM_REGISTRY=https://registry.ollama.ai/
 
-WORKDIR /
-
-
-# Copy from builder the final binary
-COPY --from=builder /app/proxy /proxy
-
-ENV NUM_DOWNLOAD_WORKERS=1
-ENV MANIFEST_LIFETIME="240h"
-ENV LOG_FORMAT_JSON="true"
-ENV CACHE_DIR="/pull-through-cache"
-
-ENV PORT=9200
 EXPOSE 9200
 
-ENTRYPOINT ["/proxy"]
+ENTRYPOINT ["/app/bin/yukari"]

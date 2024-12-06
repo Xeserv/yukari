@@ -1,72 +1,49 @@
-# Ollama Registry Pull Through Cache
+# Yukari
 
-The [ollama](https://ollama.com/) registry is somewhat a docker registry, but also somewhat not. 
-Hence, normal docker pull through caches do not work. This project aims to pull through cache, that you can 
-deploy in your local network, to speed up the pull times of the ollama registry.
+Yukari is a pull-through cache for Ollama registries. The [Ollama](https://ollama.com/) registry is somewhat a Docker registry, but also somewhat not. It's just compatible enough with the Docker registry that you can use one as storage for Ollama models, but incompatible with pull-through caching. This project offers a simple pull-through cache that you can deploy to your networks to speed up pulling models.
 
-[![Demo video of the tool on YouTube](https://img.youtube.com/vi/7_nlWlhrqNw/0.jpg)](https://www.youtube.com/watch?v=7_nlWlhrqNw)
+As a side effect, this also makes your models resistant to "left-pad" style attacks where the models you rely on are no longer available. This stores models in [Tigris](https://tigrisdata.com), but theoretically can be extended to support any S3 compatible object storage system (S3, Ceph, etc).
 
-## Usage
+## Deploying
 
-### 1. Start the cache
+Deploy this to your Kubernetes cluster by following TODO directions.
 
-#### Golang
+## Use the cache
 
-1. Install golang
-2. Clone the repo
-3. Build the code via `go build -o proxy main.go`
-4. Execute the binary via `./proxy`
-5. The cache will be available at http://localhost:9200`
+This is quite easy, **just prepend `your.yukari.instance/library/` to the image you want to run/pull**
 
-#### Docker
+This `ollama pull <image>:<tag>` becomes
 
-1. Run via docker 
-    ```
-    docker run -p 9200:9200 -v ./cache_dir_docker:/pull-through-cache ghcr.io/beans-bytes/ollama-registry-pull-through-proxy:latest
-    ```
-2. This mounts the local folder `cache_dir_docker` to the cache directory of the container. This will contain ollama files.
-3. The cache will be available at http://localhost:9200`
-
-### 2. Use the cache
-
-This is quite easy, **just prepend `http://localhost:9200/library/` to the image you want to run/pull**
-
-This `ollama pull <image>:<tag>` becomes 
 ```bash
-ollama pull --insecure http://localhost:9200/library/<image>:<tag>
+ollama pull your.yukari.instance/library/<image>:<tag>
 ```
-
-**Note: As we run on a non-https endpoint we need to add the `--insecure` to the command**
-
-p.S. Please give a thumbs up on this [PR](https://github.com/ollama/ollama/pull/5241), so that the default behavior of the ollama client can be overwrite to use the cache. 
-Will look nicer and work better.
 
 ## Architecture
 
-This proxy is based on a worker architecture. It has a worker pool, that can be configured via the `NUM_DOWNLOAD_WORKERS` environment variable. 
-When a request comes in, the proxy will check if the file is already in the cache. If not, it will mark it as queued and serve the request from the upstream. 
-In the background the worker checks the queue and downloads the file. Going forward, the file will be served from the local cache, not upstream anymore
+This proxy will forward all uncached requests to the upstream Ollama registry. When it sees you fetching a manifest, it'll scrape that manifest for the component layers and start caching them in Tigris. All subsequent fetches will be from Tigris instead of the Ollama registry.
+
+Every half an hour, Yukari will check if any manifests it has cached are more than 240 hours (10 days) old. If it finds any, it schedules reprocessing of those manifests. Any new model versions will automatically be put into Tigris, making things faster.
 
 ## Configuration options (via environment variables)
 
-| Environment Variable | Description                                                                                                      | Default                       |
-|----------------------|------------------------------------------------------------------------------------------------------------------|-------------------------------|
-| `PORT` | The port the proxy listens on                                                                                    | `9200`                        |
-| `DUMP_UPSTREAM_REQUESTS` | If the proxy should dump the upstream requests                                                                   | `false`                       |
-| `CACHE_DIR` | Directory where the cache is stored                                                                              | `./cache_dir`                 |
-| `NUM_DOWNLOAD_WORKERS` | Number of workers that download the files                                                                        | 1                             |
-| `MANIFEST_LIFETIME` | The lifetime of the model manifest. These change from time to time on the registry, and we want to get updates   | `240h` / 10 days              |
-| `UPSTREAM_ADDRESS` | The upstream ollama registry                                                                                     | `https://registry.ollama.ai/` |
-| `LOG_LEVEL` | The log level of the proxy                                                                                       | `info`                        |
-| `LOG_FORMAT_JSON` | If the log should be in json format. This is nice for external log tools. (e.g. when you run this in kubernetes) | `false`                       |
+| Environment Variable | Description                                                   | Default                                 |
+| -------------------- | ------------------------------------------------------------- | --------------------------------------- |
+| `BIND`               | The TCP host:port to bind on when serving HTTP.               | `:9200` (port 9200 on all addresses)    |
+| `INVALIDATOR_PERIOD` | How often the cache invalidator logic runs.                   | `30m` (30 minutes)                      |
+| `MANIFEST_LIFETIME`  | How long a manifest can live before it is considered invalid. | `240h` (240 hours, or 10 days)          |
+| `SLOG_LEVEL`         | The log level for [slog](https://pkg.go.dev/log/slog).        | `ERROR`                                 |
+| `TIGRIS_BUCKET`      | The Tigris bucket to cache model information in.              | `yukari` (you will need to change this) |
+| `UPSTREAM_REGISTRY`  | The upstream Ollama registry you are mirroring.               | `https://registry.ollama.ai/`           |
 
 ## Contributing
 
-Feel free to create issues and PRs. The project is tiny as of now, so no dedicated guidelines. 
+Feel free to create issues and PRs. The project is tiny as of now, so no dedicated guidelines.
 
-Disclaimer: This is a side project. Don't expect any fast responses on anything. 
+Disclaimer: This is a side project. Don't expect any fast responses on anything.
 
-## Related ollama issues & PRs
+## Related Information
+
+Yukari is a fork of [simonfrey/ollama-registry-pull-through-proxy](https://github.com/simonfrey/ollama-registry-pull-through-proxy), but there has been an almost complete rewrite during the process of making it use Tigris as a storage backend.
 
 - It is a fix to https://github.com/ollama/ollama/issues/914#issuecomment-1953482174
 - To make its behavior work better, we would need this PR merged: https://github.com/ollama/ollama/pull/5241

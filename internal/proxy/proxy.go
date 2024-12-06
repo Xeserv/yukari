@@ -1,18 +1,25 @@
 package proxy
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"path"
+	"strings"
 
-	"github.com/Xeserv/yukari/internal/worker/cache"
+	"github.com/Xeserv/yukari/internal/download"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func Handler(p *httputil.ReverseProxy, cacheDir string, upstream url.URL) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func Handler(p *httputil.ReverseProxy, bucketName string, upstream url.URL, s3c *s3.Client) http.Handler {
+	presignClient := s3.NewPresignClient(s3c)
+	d := download.New(s3c)
+	go d.Work(context.Background())
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Host = upstream.Host
 		r.URL.Host = upstream.Host
 		r.URL.Scheme = upstream.Scheme
@@ -20,27 +27,70 @@ func Handler(p *httputil.ReverseProxy, cacheDir string, upstream url.URL) func(h
 		lg := slog.With(
 			"component", "handler",
 			"method", r.Method,
-			"path", r.URL.Path,
 		)
 
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			lg.Info("method not supported, serving from upstream")
-			p.ServeHTTP(w, r)
+		switch r.Method {
+		case http.MethodGet, http.MethodHead:
+		default:
+			lg.Error("method not supported, this is a cache, not a writable sink")
+			http.Error(w, "method not supported, this is a cache, not a writable sink", http.StatusMethodNotAllowed)
 			return
 		}
 
-		cachePath := path.Join(cacheDir, r.URL.Path)
-		if _, err := os.Stat(cachePath); err == nil {
-			lg.Info("serving", "source", "cache")
+		cachePath := r.URL.Path
+		endComponent := path.Base(r.URL.Path)
+		if strings.HasPrefix(endComponent, "sha256:") {
+			cachePath = path.Join("blobs", endComponent)
+		}
 
-			http.ServeFile(w, r, cachePath)
+		if strings.HasPrefix(cachePath, "/") {
+			cachePath = strings.TrimPrefix(cachePath, "/")
+		}
+
+		lg = lg.With(
+			"bucket", bucketName,
+			"cachePath", cachePath,
+		)
+
+		if _, err := s3c.HeadObject(r.Context(), &s3.HeadObjectInput{
+			Bucket: &bucketName,
+			Key:    &cachePath,
+		}); err == nil {
+			lg.Debug("object in bucket")
+
+			// if strings.Contains(r.URL.Path, "sha256:") {
+			// Object is in bucket, send back a redirect to a presigned URL for blobs
+			var req *v4.PresignedHTTPRequest
+			var err error
+			switch r.Method {
+			case http.MethodHead:
+				req, err = presignClient.PresignHeadObject(r.Context(), &s3.HeadObjectInput{
+					Bucket: &bucketName,
+					Key:    &cachePath,
+				})
+			case http.MethodGet:
+				req, err = presignClient.PresignGetObject(r.Context(), &s3.GetObjectInput{
+					Bucket: &bucketName,
+					Key:    &cachePath,
+				})
+			}
+
+			if err != nil {
+				lg.Error("can't get presigned url", "err", err)
+				http.Error(w, "can't make presigned url, sorry :(", http.StatusInternalServerError)
+				return
+			}
+
+			lg.Info("serving", "from", "tigris")
+			http.Redirect(w, r, req.URL, http.StatusTemporaryRedirect)
 			return
 		}
 
 		// File does not exist in cache. Queue the download & serve from upstream
 		lg.Info("serving", "source", "origin")
 
-		cache.QueueFileForDownload(cachePath)
+		d.Fetch(bucketName, cachePath, r.URL.String(), "")
+
 		p.ServeHTTP(w, r)
-	}
+	})
 }
