@@ -6,7 +6,30 @@ As a side effect, this also makes your models resistant to "left-pad" style atta
 
 ## Deploying
 
-Deploy this to your Kubernetes cluster by following TODO directions.
+First, [follow the Kubernetes quickstart](https://www.tigrisdata.com/docs/quickstarts/kubernetes/) and put the Tigris credentials into a secret named `yukari-tigris-creds`:
+
+```yaml
+# yukari-tigris-creds.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: yukari-tigris-creds
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: tid_*
+  AWS_SECRET_ACCESS_KEY: tsec_*
+  AWS_ENDPOINT_URL_S3: https://fly.storage.tigris.dev
+  AWS_ENDPOINT_URL_IAM: https://fly.iam.storage.tigris.dev
+  AWS_REGION: auto
+  TIGRIS_BUCKET: mybucket
+```
+
+Deploy this to your Kubernetes cluster by using the manifests in `manifest`, be sure to edit the following fields:
+
+- The DNS hostnames in `manifest/ingress.yaml`
+- Any configuration in `manifest/deployment.yaml`'s `env` section
+
+A Helm manifest is in the works.
 
 ## Use the cache
 
