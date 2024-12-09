@@ -1,0 +1,14 @@
+Yukari is installed and available at these URL/s:
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+
+{{- if not .Values.secret.create }}
+You must create a secret for Yukari with Tigris credentials. Do so by following these directions:
+
+  https://www.tigrisdata.com/docs/quickstarts/kubernetes/
+
+Name this secret {{ .Values.secret.name }}.
+{{- end }}

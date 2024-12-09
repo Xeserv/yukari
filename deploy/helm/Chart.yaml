@@ -1,0 +1,11 @@
+apiVersion: v2
+name: yukari
+description: A pull-through cache for Ollama models.
+type: application
+version: "0.1.0"
+appVersion: "0.1.0"
+maintainers:
+- email: xe@tigrisdata.com
+  name: Xe Iaso
+- email: me@xeiaso.net
+  name: Xe Iaso (alternate in case the former doesn't work)

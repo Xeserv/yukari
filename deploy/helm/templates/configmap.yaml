@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "yukari.fullname" . }}
+  labels:
+    {{- include "yukari.labels" . | nindent 4 }}
+data:
+  {{- with .Values.config.invalidatorPeriod }}
+  INVALIDATOR_PERIOD: {{ . }}
+  {{- end }}
+  {{- with .Values.config.manifestLifetime }}
+  MANIFEST_LIFETIME: {{ . }}
+  {{- end }}
+  {{- with .Values.config.slogLevel }}
+  SLOG_LEVEL: {{ . }}
+  {{- end }}
+  {{- with .Values.config.tigrisBucket }}
+  TIGRIS_BUCKET: {{ . }}
+  {{- end }}
+  {{- with .Values.config.upstreamRegistry }}
+  UPSTREAM_REGISTRY: {{ . }}
+  {{- end }}
