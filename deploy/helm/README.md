@@ -9,7 +9,7 @@ brew install helm
 Add the Yukari helm repo:
 
 ```text
-helm repo add yukari oci://ghcr.io/xeserv/yukari/helm
+helm repo add yukari oci://ghcr.io/xeserv/helm/yukari
 ```
 
 Create a Tigris bucket and [follow the Kubernetes quickstart directions](https://www.tigrisdata.com/docs/quickstarts/kubernetes/). Make sure you name the secret `yukari-tigris-creds`.
@@ -29,19 +29,19 @@ ingress:
 
 Then install Yukari:
 
-```
+```text
 helm install yukari yukari/yukari --namespace default -f values.yaml
 ```
 
 And then use it with [Ollama](https://ollama.com). When you want to pull a model named `llama3.1`, instead of this command:
 
-```
+```text
 ollama pull llama3.1
 ```
 
 Use this command:
 
-```
+```text
 ollama pull your.yukari.hostname.tld/library/llama3.1
 ```
 
