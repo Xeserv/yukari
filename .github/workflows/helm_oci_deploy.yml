@@ -1,0 +1,29 @@
+name: Release Charts
+
+on:
+  # publish on releases, e.g. v2.1.13 (image tagged as "2.1.13" - "v" prefix is removed)
+  release:
+    types: [ published ]
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: install yq
+        uses: mikefarah/yq@v4.44.6
+            
+      - name: Package and deploy the chart
+        run: |
+          helm package deploy/helm
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+          helm push $(yq '"\(.name)-\(.version).tgz') oci://ghcr.io/${{ github.repository_owner }}/helm
