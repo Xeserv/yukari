@@ -9,7 +9,7 @@ brew install helm
 Add the Yukari helm repo:
 
 ```text
-helm repo add yukari oci://ghcr.io/xeserv/helm/yukari
+helm repo add yukari oci://ghcr.io/tigrisdata-community/helm/yukari
 ```
 
 Create a Tigris bucket and [follow the Kubernetes quickstart directions](https://www.tigrisdata.com/docs/quickstarts/kubernetes/). Make sure you name the secret `yukari-tigris-creds`.

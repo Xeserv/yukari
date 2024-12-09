@@ -9,9 +9,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/Xeserv/yukari/internal/download"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/tigrisdata-community/yukari/internal/download"
 )
 
 func Handler(p *httputil.ReverseProxy, bucketName string, upstream url.URL, s3c *s3.Client) http.Handler {

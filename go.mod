@@ -1,4 +1,4 @@
-module github.com/Xeserv/yukari
+module github.com/tigrisdata-community/yukari
 
 go 1.22
 

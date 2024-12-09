@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/Xeserv/yukari/internal/download"
-	"github.com/Xeserv/yukari/tigris"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/tigrisdata-community/yukari/internal/download"
+	"github.com/tigrisdata-community/yukari/tigris"
 )
 
 type Worker struct {

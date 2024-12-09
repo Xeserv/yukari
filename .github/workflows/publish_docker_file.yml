@@ -12,7 +12,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: xeserv/yukari
+  IMAGE_NAME: tigrisdata-community/yukari
 
 jobs:
   docker_publish:

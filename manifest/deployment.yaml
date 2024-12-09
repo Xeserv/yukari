@@ -18,7 +18,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: main
-          image: ghcr.io/xeserv/yukari:latest
+          image: ghcr.io/tigrisdata-community/yukari:latest
           imagePullPolicy: "Always"
           resources:
             limits:

@@ -11,11 +11,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/Xeserv/yukari/internal"
-	"github.com/Xeserv/yukari/internal/invalidator"
-	"github.com/Xeserv/yukari/internal/proxy"
-	"github.com/Xeserv/yukari/tigris"
 	"github.com/facebookgo/flagenv"
+	"github.com/tigrisdata-community/yukari/internal"
+	"github.com/tigrisdata-community/yukari/internal/invalidator"
+	"github.com/tigrisdata-community/yukari/internal/proxy"
+	"github.com/tigrisdata-community/yukari/tigris"
 )
 
 var (
