@@ -53,7 +53,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/", proxy.Handler(
+	mux.Handle("/v2/", proxy.Handler(
 		singleHostReverseProxy,
 		*tigrisBucket,
 		*upstream,
