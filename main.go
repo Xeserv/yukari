@@ -72,6 +72,8 @@ func main() {
 	))
 
 	if *civitaiToken != "" {
+		slog.Info("enabling civitai proxy")
+
 		civ := civitai.New(*civitaiToken)
 
 		civProxy := civitaiproxy.New(d, civ, s3c, *tigrisBucket)
