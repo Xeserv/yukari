@@ -17,8 +17,7 @@ type Worker struct {
 	d          *download.Downloader
 }
 
-func New(s3c *s3.Client, bucketName string) *Worker {
-	d := download.New(s3c)
+func New(s3c *s3.Client, d *download.Downloader, bucketName string) *Worker {
 	return &Worker{s3c, bucketName, d}
 }
 
@@ -47,7 +46,7 @@ func (w *Worker) Work(ctx context.Context, invalidatorPeriod, manifestLifetime t
 
 				manifestURL := fmt.Sprintf("https://registry.ollama.ai/%s", *obj.Key)
 
-				w.d.Fetch(w.bucketName, *obj.Key, manifestURL, "application/vnd.docker.distribution.manifest.v2+json")
+				w.d.Fetch(w.bucketName, *obj.Key, manifestURL, "application/vnd.docker.distribution.manifest.v2+json", "")
 			}
 
 			time.Sleep(invalidatorPeriod)

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sync"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -36,7 +37,7 @@ func New(s3c *s3.Client) *Downloader {
 }
 
 type downloadWork struct {
-	bucket, key, pullURL, mediaType string
+	bucket, key, pullURL, mediaType, authorizationHeader string
 }
 
 func (d downloadWork) LogValue() slog.Value {
@@ -45,10 +46,11 @@ func (d downloadWork) LogValue() slog.Value {
 		slog.String("key", d.key),
 		slog.String("pullURL", d.pullURL),
 		slog.String("mediaType", d.mediaType),
+		slog.Bool("hasAuthzHeader", d.authorizationHeader != ""),
 	)
 }
 
-func (d *Downloader) Fetch(bucket, key, pullURL, mediaType string) {
+func (d *Downloader) Fetch(bucket, key, pullURL, mediaType, authorizationHeader string) {
 	d.Lock()
 	_, found := d.inFlight[pullURL]
 	d.Unlock()
@@ -57,7 +59,7 @@ func (d *Downloader) Fetch(bucket, key, pullURL, mediaType string) {
 		return
 	}
 
-	d.inp <- downloadWork{bucket, key, pullURL, mediaType}
+	d.inp <- downloadWork{bucket, key, pullURL, mediaType, authorizationHeader}
 
 	d.Lock()
 	d.inFlight[pullURL] = struct{}{}
@@ -94,39 +96,52 @@ func (d *Downloader) work(ctx context.Context) {
 
 			lg.Info("fetching")
 
-			resp, err := http.Get(work.pullURL)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, work.pullURL, nil)
+			if err != nil {
+				lg.Error("can't make request", "err", err)
+			}
+
+			req.Header.Set("Authorization", work.authorizationHeader)
+
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				lg.Error("can't fetch from remote", "err", err)
 				continue
 			}
 			defer resp.Body.Close()
 
+			if resp.StatusCode != http.StatusOK {
+				lg.Error("can't download, wrong status", "u", resp.Request.URL.String(), "wantStatus", http.StatusOK, "gotStatus", resp.StatusCode)
+				continue
+			}
+
 			mt := resp.Header.Get("Content-Type")
 			// NOTE(Xe): God is dead. The Ollama registry returns text/plain here when they should
 			// really return application/json, or ideally application/vnd.docker.distribution.manifest.v2+json.
 			// We have to treat JSON as if it's not JSON here. I hate it too.
 			if mt == "text/plain; charset=utf-8" {
-				if err := d.hackHandleManifests(work, resp); err != nil {
+				if err := d.hackHandleManifests(&work, resp); err != nil {
 					lg.Error("can't hackily handle manifests", "err", err)
 				}
 			}
 
 			if _, err := d.s3c.PutObject(ctx, &s3.PutObjectInput{
-				Bucket:        &work.bucket,
-				Key:           &work.key,
-				ContentType:   &work.mediaType,
-				Body:          resp.Body,
-				ContentLength: &resp.ContentLength,
+				Bucket:             &work.bucket,
+				Key:                &work.key,
+				ContentType:        &work.mediaType,
+				Body:               resp.Body,
+				ContentLength:      &resp.ContentLength,
+				ContentDisposition: aws.String(resp.Header.Get("Content-Disposition")),
 			}); err != nil {
 				lg.Error("can't put, retrying", "err", err)
-				go d.Fetch(work.bucket, work.key, work.pullURL, work.mediaType)
+				go d.Fetch(work.bucket, work.key, work.pullURL, work.mediaType, work.authorizationHeader)
 				return
 			}
 		}
 	}
 }
 
-func (d *Downloader) hackHandleManifests(work downloadWork, resp *http.Response) error {
+func (d *Downloader) hackHandleManifests(work *downloadWork, resp *http.Response) error {
 	rd := io.LimitReader(resp.Body, 4*4096) // at most 16k of json
 	data, err := io.ReadAll(rd)
 	if err != nil {
@@ -156,7 +171,7 @@ func (d *Downloader) hackHandleManifests(work downloadWork, resp *http.Response)
 
 	go func(manifest Manifest, urlBase string) {
 		for _, layer := range manifest.Layers {
-			d.Fetch(work.bucket, path.Join("blobs", layer.Digest), urlBase+"/"+path.Join("blobs", layer.Digest), layer.MediaType)
+			d.Fetch(work.bucket, path.Join("blobs", layer.Digest), urlBase+"/"+path.Join("blobs", layer.Digest), layer.MediaType, work.authorizationHeader)
 		}
 	}(manifest, urlBase)
 

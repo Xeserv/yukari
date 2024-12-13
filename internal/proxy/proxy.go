@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -14,10 +13,8 @@ import (
 	"github.com/tigrisdata-community/yukari/internal/download"
 )
 
-func Handler(p *httputil.ReverseProxy, bucketName string, upstream url.URL, s3c *s3.Client) http.Handler {
+func Handler(p *httputil.ReverseProxy, d *download.Downloader, bucketName string, upstream url.URL, s3c *s3.Client) http.Handler {
 	presignClient := s3.NewPresignClient(s3c)
-	d := download.New(s3c)
-	go d.Work(context.Background())
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Host = upstream.Host
@@ -43,9 +40,7 @@ func Handler(p *httputil.ReverseProxy, bucketName string, upstream url.URL, s3c 
 			cachePath = path.Join("blobs", endComponent)
 		}
 
-		if strings.HasPrefix(cachePath, "/") {
-			cachePath = strings.TrimPrefix(cachePath, "/")
-		}
+		cachePath = strings.TrimPrefix(cachePath, "/")
 
 		lg = lg.With(
 			"bucket", bucketName,
@@ -89,7 +84,7 @@ func Handler(p *httputil.ReverseProxy, bucketName string, upstream url.URL, s3c 
 		// File does not exist in cache. Queue the download & serve from upstream
 		lg.Info("serving", "source", "origin")
 
-		d.Fetch(bucketName, cachePath, r.URL.String(), "")
+		d.Fetch(bucketName, cachePath, r.URL.String(), "", r.Header.Get("Authorization"))
 
 		p.ServeHTTP(w, r)
 	})
