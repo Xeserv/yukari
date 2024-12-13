@@ -1,4 +1,4 @@
-package proxy
+package ollamaproxy
 
 import (
 	"log/slog"

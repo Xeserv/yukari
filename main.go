@@ -18,8 +18,8 @@ import (
 	"github.com/tigrisdata-community/yukari/internal/civitaiinvalidator"
 	"github.com/tigrisdata-community/yukari/internal/civitaiproxy"
 	"github.com/tigrisdata-community/yukari/internal/download"
-	"github.com/tigrisdata-community/yukari/internal/invalidator"
-	"github.com/tigrisdata-community/yukari/internal/proxy"
+	"github.com/tigrisdata-community/yukari/internal/ollamainvalidator"
+	"github.com/tigrisdata-community/yukari/internal/ollamaproxy"
 	"github.com/tigrisdata-community/yukari/tigris"
 )
 
@@ -58,12 +58,12 @@ func main() {
 	go d.Work(context.Background())
 	go d.Work(context.Background())
 
-	invalWorker := invalidator.New(s3c, d, *tigrisBucket)
+	invalWorker := ollamainvalidator.New(s3c, d, *tigrisBucket)
 	go invalWorker.Work(ctx, *invalidatorPeriod, *manifestLifetime)
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/v2/", proxy.Handler(
+	mux.Handle("/v2/", ollamaproxy.Handler(
 		singleHostReverseProxy,
 		d,
 		*tigrisBucket,

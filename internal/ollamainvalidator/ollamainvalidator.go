@@ -1,4 +1,4 @@
-package invalidator
+package ollamainvalidator
 
 import (
 	"context"
